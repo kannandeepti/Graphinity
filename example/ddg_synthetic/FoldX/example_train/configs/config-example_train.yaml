@@ -6,11 +6,11 @@ test: True
 logger_params:
   wandb_bool: False
   ## uncomment and update for logging with Weights and Biases (wandb)
-  #entity: # wandb username
-  #wandb: # wandb project name
-  #group: # wandb group name
-  #log_interval: 10
-  #print_interval: 50
+  # entity: kannandeepti
+  # wandb: Graphinity
+  # group: example_train
+  # log_interval: 10
+  # print_interval: 50
 
 model: ddgEGNN
 model_params:

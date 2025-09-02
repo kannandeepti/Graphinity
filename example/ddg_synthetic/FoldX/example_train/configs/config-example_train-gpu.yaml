@@ -4,13 +4,13 @@ train: True
 test: True
 
 logger_params:
-  wandb_bool: False
+  wandb_bool: True
   ## uncomment and update for logging with Weights and Biases (wandb)
-  #entity: # wandb username
-  #wandb: # wandb project name
-  #group: # wandb group name
-  #log_interval: 10
-  #print_interval: 50
+  entity: kannandeepti
+  wandb: graphinity-ddg
+  group: example-train
+  log_interval: 10
+  print_interval: 50
 
 model: ddgEGNN
 model_params:
@@ -40,7 +40,7 @@ trainer_params:
 
 loader_params:
   batch_size: 32
-  num_workers: 1
+  num_workers: 4
 
 dataset_params:
   rotate: False

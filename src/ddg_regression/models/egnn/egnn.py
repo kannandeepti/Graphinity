@@ -132,19 +132,30 @@ class E_GCL(nn.Module):
         return out
 
     def node_model(self, x, edge_index, edge_attr, node_attr, batch):
-        row, col = edge_index
-        agg = unsorted_segment_sum(edge_attr, row, num_segments=x.size(0))
+        """
+        Args:
+            x: Tensor of shape [num_nodes, input_nf]
+            edge_index: LongTensor of shape [2, num_edges]
+            edge_attr: Tensor of shape [num_edges, hidden_nf]
+            node_attr: Optional[Tensor] of shape [num_nodes, node_attr_dim]
+            batch: Optional[Tensor] of shape [num_nodes]
+        Returns:
+            out: Tensor of shape [num_nodes, output_nf]
+            agg: Tensor of shape [num_nodes, hidden_nf + input_nf (+ node_attr_dim if node_attr is not None)]
+        """
+        row, col = edge_index  # row, col: [num_edges]
+        agg = unsorted_segment_sum(edge_attr, row, num_segments=x.size(0))  # [num_nodes, hidden_nf]
         if node_attr is not None:
-            agg = torch.cat([x, agg, node_attr], dim=1)
+            agg = torch.cat([x, agg, node_attr], dim=1)  # [num_nodes, input_nf + hidden_nf + node_attr_dim]
         else:
-            agg = torch.cat([x, agg], dim=1)
-        out = self.node_mlp1(agg)
+            agg = torch.cat([x, agg], dim=1)  # [num_nodes, input_nf + hidden_nf]
+        out = self.node_mlp1(agg)  # [num_nodes, hidden_nf]
         if self.norm_nodes:
-            out = self.node_norm_layer1(out, batch=batch)
-        out = self.node_mlp2(out)
+            out = self.node_norm_layer1(out, batch=batch)  # [num_nodes, hidden_nf]
+        out = self.node_mlp2(out)  # [num_nodes, output_nf]
         if self.residual:
-            out = x + out
-        return out, agg
+            out = x + out  # [num_nodes, output_nf] (assumes x and out have same shape)
+        return out, agg  # out: [num_nodes, output_nf], agg: [num_nodes, ...]
 
     def coord_model(self, coord, edge_index, coord_diff, edge_feat):
         row, col = edge_index
@@ -234,6 +245,9 @@ def unsorted_segment_mean(data, segment_ids, num_segments):
     return result / count.clamp(min=1)
 
 def unsorted_segment_sum(data, segment_ids, num_segments):
+    # This code computes the sum of elements in 'data' grouped by 'segment_ids'.
+    # For each unique segment id (from 0 to num_segments-1), it sums the rows of 'data' assigned to that segment.
+    # The result is a tensor of shape (num_segments, data.size(1)), where each row contains the sum for that segment.
     result_shape = (num_segments, data.size(1))
     result = data.new_full(result_shape, 0)  # Init empty result tensor.
     segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))

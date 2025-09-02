@@ -12,7 +12,7 @@ from torch_geometric.data import DataLoader as GeoDataLoader
 from pathlib import Path
 import sys
 # from sklearn.metrics import average_precision_score, roc_auc_score
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 from base.dataset import ddgData, ddgDataSet
 from models.graphnorm.graphnorm import GraphNorm
 from models.egnn.egnn import E_GCL, EGNN
@@ -22,9 +22,19 @@ from typing import Optional
 import torch
 from torch import Tensor
 from torch_scatter import scatter_mean
-
+import time
 import pandas as pd
 
+def compute_param_norm(model: nn.Module):
+    return sum(p.norm().item() for p in model.parameters())
+
+
+def compute_grad_norm(model: nn.Module):
+    return sum(p.grad.data.norm().item() for p in model.parameters() if p.grad is not None)
+
+
+def compute_param_count(model: nn.Module):
+    return sum(p.numel() for p in model.parameters())
 
 def to_np(x): # returns tensor detached, on cpu and as numpy array
     return x.cpu().detach().numpy()
@@ -117,7 +127,8 @@ class ddgEGNN(pl.LightningModule):
         self.norm_nodes = norm_nodes
         if norm_nodes:
             self.graphnorm = GraphNorm(embedding_out_nf)
-
+        self.log('param_count', compute_param_count(self))
+        self.time = time.time()
             
     def forward(self, graph):
         """
@@ -258,8 +269,9 @@ class ddgEGNN(pl.LightningModule):
 
         # calculate pearson correlation
         pearson_corr = pearsonr(ys, preds) # y_true=ys, y_score=preds
+        spearman_corr = spearmanr(ys, preds) # y_true=ys, y_score=preds
 
-        return pearson_corr[0]
+        return pearson_corr[0], spearman_corr[0]
 
     
     def test_epoch_end(self, output):
@@ -269,9 +281,12 @@ class ddgEGNN(pl.LightningModule):
         Args:
             output
         """
-        pearson_corr = self.epoch_metrics(output)
+        pearson_corr, spearman_corr = self.epoch_metrics(output)
         print('test_pearson_corr', pearson_corr)
+        print('test_spearman_corr', spearman_corr)
         self.log('test_pearson_corr', pearson_corr)
+        self.log('test_spearman_corr', spearman_corr)
+        self.log('training_time', time.time() - self.time)
         
         
     def validation_epoch_end(self, output):
@@ -281,9 +296,13 @@ class ddgEGNN(pl.LightningModule):
         Args:
             output
         """
-        pearson_corr = self.epoch_metrics(output)
+        pearson_corr, spearman_corr = self.epoch_metrics(output)
         print('val_pearson_corr', pearson_corr)
+        print('val_spearman_corr', spearman_corr)
         self.log('val_pearson_corr', pearson_corr)
+        self.log('val_spearman_corr', spearman_corr)
+        self.log('training_time', time.time() - self.time)
+        self.log('param_norm', compute_param_norm(self))
 
         
     def training_epoch_end(self, output):
@@ -293,10 +312,11 @@ class ddgEGNN(pl.LightningModule):
         Args:
             output
         """
-        pearson_corr = self.epoch_metrics(output)
+        pearson_corr, spearman_corr = self.epoch_metrics(output)
         print('train_pearson_corr', pearson_corr)
+        print('train_spearman_corr', spearman_corr)
         self.log('train_pearson_corr', pearson_corr)
-        
+        self.log('train_spearman_corr', spearman_corr)
         
     def save_test_predictions(self, filename: Path):
         """
@@ -456,6 +476,7 @@ def get_edges_batch(n_nodes, batch_size):
 
 
 if __name__ == "__main__":
+    
     # Dummy parameters
     batch_size = 8
     n_nodes = 4
